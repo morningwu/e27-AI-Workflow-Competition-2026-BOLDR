@@ -1,0 +1,147 @@
+{
+  "name": "WF4 - Marketing Insight Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "marketing-insight",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-wf4-01",
+      "name": "Receive Gap Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "boldr-marketing-insight"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "cfg-1", "name": "QWEN_API_KEY",  "value": "PASTE_YOUR_DASHSCOPE_API_KEY_HERE", "type": "string" },
+            { "id": "cfg-2", "name": "QWEN_MODEL",    "value": "qwen-plus", "type": "string" },
+            { "id": "cfg-3", "name": "QWEN_BASE_URL", "value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "type": "string" },
+            { "id": "cfg-4", "name": "SUPABASE_URL",  "value": "https://grswszdpneukcbfakdel.supabase.co", "type": "string" },
+            { "id": "cfg-5", "name": "SUPABASE_KEY",  "value": "PASTE_YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-wf4-02",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Configuration').first().json.SUPABASE_URL + '/rest/v1/knowledge_gaps?select=id,customer_question,theme&theme=eq.' + (($('Receive Gap Webhook').first().json.body || $('Receive Gap Webhook').first().json).theme || 'knowledge_gap') + '&limit=50' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $('Configuration').first().json.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $('Configuration').first().json.SUPABASE_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "node-wf4-03",
+      "name": "Fetch Related Gaps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config     = $('Configuration').first().json;\nconst webhookRaw = $('Receive Gap Webhook').first().json;\nconst gap        = webhookRaw.body || webhookRaw;\n\nconst relatedRaw  = $('Fetch Related Gaps').first().json;\nconst related     = Array.isArray(relatedRaw) ? relatedRaw : [];\nconst relatedCount = Math.max(0, related.length - 1);\n\nconsole.log('Generating insight for gap: ' + (gap.customer_question || gap.subject) + ' | theme: ' + gap.theme + ' | related: ' + relatedCount);\n\nconst sys = 'You are a marketing strategist for Boldr, a Singapore-based watch micro-brand known for honest materials, craftsmanship, and transparency.\\n\\nA customer just asked a question that the CS team could NOT answer — meaning this information does not exist on Boldr\\'s product pages or in their knowledge base.\\n\\nThis is a signal: when customers ask something that is not answered, they are revealing a content gap that competitors are likely also ignoring. Your job is to assess whether this gap is a marketing opportunity Boldr could own.\\n\\nWatch brand context in SEA: Most watch brands in Southeast Asia do not publish detailed materials safety data, sustainability sourcing, or honest technical specs in their marketing. There is a clear opening for a brand that speaks openly about these things.\\n\\nScore each dimension 1–10:\\n- score_uniqueness: how underserved is this angle among watch brands in SEA? (10 = nobody does this)\\n- score_conversion: how likely does directly addressing this remove a real purchase barrier? (10 = very likely)\\n- score_overall: holistic marketing potential\\n\\nRespond ONLY with valid JSON, no markdown, no extra text:\\n{\\n  \"marketing_angle\": \"One sentence: the market position this gap reveals Boldr could own\",\\n  \"campaign_idea\": \"Specific actionable content or campaign idea in 2–3 sentences\",\\n  \"test_suggestion\": \"The cheapest fastest way to test this angle — one Instagram post, one FAQ update, or one email\",\\n  \"score_uniqueness\": 8,\\n  \"score_conversion\": 7,\\n  \"score_overall\": 8,\\n  \"rationale\": \"One sentence explaining why it scores as it does\"\\n}';\n\nconst usr = [\n  'Customer question: ' + (gap.customer_question || gap.subject || 'Unknown'),\n  'Theme: '             + (gap.theme             || 'knowledge_gap'),\n  'Buyer persona: '     + (gap.buyer_persona      || 'unknown'),\n  'Channel: '           + (gap.channel            || 'email'),\n  'Gap reason: '        + (gap.gap_reason         || 'Not in knowledge base'),\n  'Other customers with questions in the same theme: ' + relatedCount\n].join('\\n');\n\nreturn [{ json: {\n  gap, config, related_count: relatedCount,\n  request_body: {\n    model:      config.QWEN_MODEL,\n    max_tokens: 600,\n    messages:   [{ role: 'system', content: sys }, { role: 'user', content: usr }]\n  }\n} }];"
+      },
+      "id": "node-wf4-04",
+      "name": "Build Qwen Insight Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuration').first().json.QWEN_BASE_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Configuration').first().json.QWEN_API_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.request_body }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-wf4-05",
+      "name": "Qwen - Generate Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first();\nconst orig     = $('Build Qwen Insight Request').first().json;\nconst rawText  = response.json.choices?.[0]?.message?.content || '';\nconst cleaned  = rawText.replace(/^```json\\s*/i,'').replace(/^```\\s*/i,'').replace(/\\s*```$/i,'').trim();\nlet r;\ntry { r = JSON.parse(cleaned); } catch(e) {\n  const m = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (m) { try { r = JSON.parse(m[0]); } catch(e2) { r = null; } }\n}\nif (!r) {\n  r = { marketing_angle: 'Insight parse error', campaign_idea: '', test_suggestion: '',\n        score_uniqueness: 5, score_conversion: 5, score_overall: 5, rationale: 'Parse failed: ' + rawText.substring(0,100) };\n}\nconsole.log('Insight ready — overall score: ' + r.score_overall + ' | angle: ' + r.marketing_angle);\nconst gap = orig.gap;\nreturn [{ json: {\n  ticket_id:         gap.ticket_id         || '',\n  theme:             gap.theme             || 'knowledge_gap',\n  buyer_persona:     gap.buyer_persona      || 'unknown',\n  channel:           gap.channel            || 'email',\n  customer_question: gap.customer_question  || gap.subject || '',\n  marketing_angle:   r.marketing_angle      || '',\n  campaign_idea:     r.campaign_idea        || '',\n  test_suggestion:   r.test_suggestion      || '',\n  score_uniqueness:  r.score_uniqueness      || 5,\n  score_conversion:  r.score_conversion      || 5,\n  score_overall:     r.score_overall         || 5,\n  rationale:         r.rationale             || '',\n  config:            orig.config\n} }];"
+      },
+      "id": "node-wf4-06",
+      "name": "Parse Qwen Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.SUPABASE_URL + '/rest/v1/marketing_insights' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $json.config.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $json.config.SUPABASE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { ticket_id: $json.ticket_id, theme: $json.theme, buyer_persona: $json.buyer_persona, channel: $json.channel, customer_question: $json.customer_question, marketing_angle: $json.marketing_angle, campaign_idea: $json.campaign_idea, test_suggestion: $json.test_suggestion, score_uniqueness: $json.score_uniqueness, score_conversion: $json.score_conversion, score_overall: $json.score_overall, rationale: $json.rationale } }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "node-wf4-07",
+      "name": "Save Insight to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, score: $('Parse Qwen Response').first().json.score_overall, marketing_angle: $('Parse Qwen Response').first().json.marketing_angle } }}",
+        "options": {}
+      },
+      "id": "node-wf4-08",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Receive Gap Webhook":       { "main": [[{ "node": "Configuration",           "type": "main", "index": 0 }]] },
+    "Configuration":             { "main": [[{ "node": "Fetch Related Gaps",       "type": "main", "index": 0 }]] },
+    "Fetch Related Gaps":        { "main": [[{ "node": "Build Qwen Insight Request","type": "main", "index": 0 }]] },
+    "Build Qwen Insight Request":{ "main": [[{ "node": "Qwen - Generate Insight",  "type": "main", "index": 0 }]] },
+    "Qwen - Generate Insight":   { "main": [[{ "node": "Parse Qwen Response",      "type": "main", "index": 0 }]] },
+    "Parse Qwen Response":       { "main": [[{ "node": "Save Insight to Supabase", "type": "main", "index": 0 }]] },
+    "Save Insight to Supabase":  { "main": [[{ "node": "Respond to Webhook",       "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "1.0.0"
+}

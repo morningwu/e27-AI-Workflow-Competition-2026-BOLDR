@@ -1,0 +1,299 @@
+{
+  "name": "WF1 - Boldr Core Intelligence Loop",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-01-trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "cfg-1", "name": "QWEN_API_KEY",   "value": "PASTE_YOUR_DASHSCOPE_API_KEY_HERE", "type": "string" },
+            { "id": "cfg-2", "name": "QWEN_MODEL",     "value": "qwen-plus", "type": "string" },
+            { "id": "cfg-3", "name": "QWEN_BASE_URL",  "value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "type": "string" },
+            { "id": "cfg-4", "name": "TICKET_LIMIT",   "value": 10, "type": "number" },
+            { "id": "cfg-5", "name": "SUPABASE_URL",   "value": "https://grswszdpneukcbfakdel.supabase.co", "type": "string" },
+            { "id": "cfg-6", "name": "SUPABASE_KEY",   "value": "PASTE_YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-02-config",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300],
+      "notes": "TICKET_LIMIT: 0 = all open tickets. Set to 5 or 10 for testing."
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Configuration').first().json;\nconst processedIds = new Set();\n\nconsole.log('=== Fetch Dedup IDs ===');\nconsole.log('Supabase URL: ' + config.SUPABASE_URL);\nconsole.log('Key length: ' + (config.SUPABASE_KEY ? config.SUPABASE_KEY.length : 0));\n\nconst h = this.helpers;\n\nconst fetchTable = async (table) => {\n  try {\n    const url = config.SUPABASE_URL + '/rest/v1/' + table + '?select=ticket_id&limit=5000';\n    const data = await h.httpRequest({\n      method: 'GET',\n      url: url,\n      headers: {\n        apikey: config.SUPABASE_KEY,\n        Authorization: 'Bearer ' + config.SUPABASE_KEY,\n        Accept: 'application/json'\n      },\n      json: true\n    });\n    if (Array.isArray(data)) {\n      console.log(table + ': ' + data.length + ' records returned');\n      return data;\n    }\n    console.log(table + ': unexpected response: ' + JSON.stringify(data).substring(0, 200));\n    return [];\n  } catch(e) {\n    console.log(table + ' error: ' + (e.message || e));\n    return [];\n  }\n};\n\nconst processed = await fetchTable('tickets_processed');\nprocessed.forEach(row => row.ticket_id && processedIds.add(row.ticket_id));\n\nconst gaps = await fetchTable('knowledge_gaps');\ngaps.forEach(row => row.ticket_id && processedIds.add(row.ticket_id));\n\nconsole.log('Total IDs to skip: ' + processedIds.size);\nreturn [{ json: { processed_ids: [...processedIds], count: processedIds.size } }];"
+      },
+      "id": "node-16-fetch-dedup",
+      "name": "Fetch Dedup IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst KB_DIR = '/home/node/data/Knowledge Sources/';\n\n// --- Read all knowledge source files ---\nconst faqText        = fs.readFileSync(KB_DIR + '04_faq_document.txt',        'utf8');\nconst productRefText = fs.readFileSync(KB_DIR + '02_product_reference.txt',   'utf8');\nconst engravingCsv   = fs.readFileSync(KB_DIR + '03a_rate_card_engraving.csv', 'utf8');\nconst servicingCsv   = fs.readFileSync(KB_DIR + '03b_rate_card_servicing.csv', 'utf8');\nconst ticketsCsv     = fs.readFileSync('/home/node/data/01_customer_tickets.csv', 'utf8');\n\n// --- Fetch learned KB entries from Supabase (safe — empty result never blocks flow) ---\nconst config = $('Configuration').first().json;\nlet kbAdditions = [];\ntry {\n  const kbResp = await fetch(\n    config.SUPABASE_URL + '/rest/v1/kb_additions?status=eq.approved&order=approved_at.asc',\n    { headers: { 'apikey': config.SUPABASE_KEY, 'Authorization': 'Bearer ' + config.SUPABASE_KEY } }\n  );\n  if (kbResp.ok) {\n    const data = await kbResp.json();\n    if (Array.isArray(data)) kbAdditions = data;\n  }\n} catch (e) {\n  console.log('KB additions fetch skipped: ' + e.message);\n}\nconsole.log('Learned KB entries from Supabase: ' + kbAdditions.length);\n\n// --- Get processedIds from Fetch Dedup IDs node (always runs, even on first run) ---\nconst dedupResult = $('Fetch Dedup IDs').first().json;\nconst processedIds = new Set(dedupResult.processed_ids || []);\nconsole.log('Total IDs to skip: ' + processedIds.size);\n\n// --- CSV parser ---\nfunction parseCSV(csv) {\n  const lines = csv.split('\\n').filter(l => l.trim());\n  const headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, ''));\n  return lines.slice(1).map(line => {\n    const values = [];\n    let cur = '', inQ = false;\n    for (const c of line) {\n      if (c === '\"') { inQ = !inQ; }\n      else if (c === ',' && !inQ) { values.push(cur.trim().replace(/^\"|\"$/g, '')); cur = ''; }\n      else { cur += c; }\n    }\n    values.push(cur.trim().replace(/^\"|\"$/g, ''));\n    const obj = {};\n    headers.forEach((h, i) => { obj[h] = values[i] !== undefined ? values[i] : ''; });\n    return obj;\n  }).filter(r => Object.values(r).some(v => v));\n}\n\n// --- Format rate cards as readable text ---\nconst engravingRows = parseCSV(engravingCsv);\nconst servicingRows = parseCSV(servicingCsv);\n\nconst engravingText = engravingRows\n  .map(r => `  - ${r.service}: SGD ${r.price_sgd} — ${r.notes}`)\n  .join('\\n');\n\nconst servicingText = servicingRows\n  .map(r => `  - ${r.service_tier}: SGD ${r.price_sgd}, ${r.turnaround_days} days — includes: ${r.includes}`)\n  .join('\\n');\n\n// --- Assemble Knowledge Base ---\nconst kbSections = [\n  '================================================================',\n  'KNOWLEDGE BASE — BOLDR WATCH CS TEAM',\n  '================================================================',\n  '',\n  '--- ⚠️  PRICING CORRECTIONS (HIGHEST PRIORITY — OVERRIDE ALL OTHER SOURCES) ---',\n  'The following prices have been verified by the BOLDR team and supersede any',\n  'conflicting figures in the FAQ, rate card, or SOP documents.',\n  '',\n  '  ENGRAVING — Caseback 21 to 40 characters: SGD 35 (CORRECT)',\n  '    → FAQ document incorrectly states SGD 40. SOP figure of SGD 35 is authoritative.',\n  '    → Flag: [PRICE_CORRECTION_APPLIED] whenever answering this specific query.',\n  '',\n  '--- SECTION 1: FAQ DOCUMENT (28 entries) ---',\n  faqText.trim(),\n  '',\n  '--- SECTION 2: PRODUCT REFERENCE ---',\n  productRefText.trim(),\n  '',\n  '--- SECTION 3: ENGRAVING RATE CARD ---',\n  engravingText,\n  '',\n  '--- SECTION 4: SERVICING RATE CARD ---',\n  servicingText\n];\n\n// --- Append learned entries (Section 5 only shown when entries exist) ---\nif (kbAdditions.length > 0) {\n  kbSections.push('');\n  kbSections.push('--- SECTION 5: LEARNED KB ENTRIES (resolved by CS team via WF2) ---');\n  kbSections.push('These entries were added automatically from resolved knowledge gaps.');\n  kbAdditions.forEach((row, i) => {\n    kbSections.push('');\n    kbSections.push(`Q${i + 1}: ${row.question}`);\n    kbSections.push(`A${i + 1}: ${row.answer}`);\n  });\n}\n\nkbSections.push('================================================================');\nconst KB_CONTEXT = kbSections.join('\\n');\n\n// --- Pull config ---\nconst limit = Number(config.TICKET_LIMIT) || 0;\n\n// --- Load and filter tickets — skip already processed ---\nconst allOpenInCSV = parseCSV(ticketsCsv)\n  .filter(t => t.ticket_id && ['open', 'pending_reply'].includes((t.status || '').toLowerCase()));\nconst newTickets = allOpenInCSV.filter(t => !processedIds.has(t.ticket_id));\nconst tickets = limit > 0 ? newTickets.slice(0, limit) : newTickets;\n\nif (tickets.length === 0) {\n  if (newTickets.length === 0 && allOpenInCSV.length > 0) {\n    console.log('✅ All ' + allOpenInCSV.length + ' open tickets have already been processed (' + processedIds.size + ' IDs in Supabase). Nothing new to do.');\n  } else if (allOpenInCSV.length === 0) {\n    console.log('No open tickets found in the CSV file.');\n  } else {\n    console.log('No tickets selected (limit or filter issue).');\n  }\n  return [];\n}\n\nconsole.log(`KB: FAQ + Product Ref + Engraving + Servicing + ${kbAdditions.length} learned entries`);\nconsole.log(`Processing ${tickets.length} new tickets (${processedIds.size} already done, ${newTickets.length - tickets.length} more waiting after this batch, limit: ${limit || 'none'})`);\n\nreturn tickets.map(t => ({\n  json: {\n    ticket_id:        t.ticket_id,\n    date_received:    t.date_received,\n    customer_name:    t.customer_name,\n    customer_email:   t.customer_email,\n    subject:          t.subject,\n    message_body:     t.message_body,\n    channel:          (t.channel || 'email').toLowerCase().trim(),\n    question_type:    t.question_type,\n    existing_persona: t.buyer_persona,\n    kb_context:       KB_CONTEXT,\n    api_key:          config.QWEN_API_KEY,\n    model:            config.QWEN_MODEL,\n    base_url:         config.QWEN_BASE_URL\n  }\n}));"
+      },
+      "id": "node-03-load",
+      "name": "Load Tickets and Build KB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const t = item.json;\n\n  const systemPrompt = [\n    'You are a customer service AI assistant for Boldr, a Singapore-based watch micro-brand.',\n    'Your job is to classify customer enquiries and draft replies when possible.',\n    '',\n    t.kb_context,\n    '',\n    'BUYER PERSONAS — classify each ticket into exactly one:',\n    '- health_conscious: BPA-free, nickel-free, hypoallergenic, EU REACH, safe for kids, skin safety',\n    '- gifter: engraving, gift wrap, personalisation, birthday, anniversary, turnaround time',\n    '- enthusiast_collector: Grade 5 titanium, Miyota movement, technical specs, limited editions',\n    '- active_outdoor: water resistance, shock, trail running, FKM rubber, durability, outdoor',\n    '- sustainability: vegan straps, eco packaging, carbon offset, ethical sourcing',\n    '- unknown: does not clearly fit any persona above',\n    '',\n    'CLASSIFICATION RULES:',\n    '1. ALWAYS check the PRICING CORRECTIONS section first — it overrides all other sources.',\n    '2. Search the rest of the Knowledge Base for a relevant answer.',\n    '3. If the answer is clearly present — set answerable: true.',\n    '4. If the answer is NOT in the KB — set answerable: false. NEVER guess or hallucinate.',\n    '5. If answerable, draft a reply in BOLDR tone:',\n    '   - Address the customer by first name.',\n    '   - Friendly and professional — premium brand, not overly casual.',\n    '   - Vary the opening naturally every time — do NOT repeat the same greeting phrase.',\n    '   - Get straight to the answer. No filler. No padding.',\n    '   - NEVER open with: Hi [Name], thanks for reaching out! Happy to help with that.',\n    '   - NEVER start with Great question! or any version of it.',\n    '   - NEVER use Dear Sir/Madam.',\n    '   - NEVER promise timelines you cannot guarantee.',\n    '6. If a PRICING CORRECTIONS override was used, include [PRICE_CORRECTION_APPLIED] at the end of draft_reply.',\n    '',\n    'Respond ONLY with valid JSON — no markdown, no extra text:',\n    '{',\n    '  \"answerable\": true,',\n    '  \"confidence\": 0.95,',\n    '  \"theme\": \"materials_safety\",',\n    '  \"buyer_persona\": \"health_conscious\",',\n    '  \"draft_reply\": \"[natural opening that varies each time, straight to the answer]\",',\n    '  \"gap_reason\": null',\n    '}',\n    '',\n    'theme must be one of: materials_safety, customisation, servicing, shipping, product_specs, sustainability, pricing, knowledge_gap'\n  ].join('\\n');\n\n  const userMessage = [\n    'Ticket ID: '  + t.ticket_id,\n    'Customer: '   + t.customer_name,\n    'Channel: '    + t.channel,\n    'Subject: '    + t.subject,\n    '',\n    'Message:',\n    t.message_body\n  ].join('\\n');\n\n  return {\n    json: {\n      api_key:          t.api_key,\n      base_url:         t.base_url,\n      ticket_id:        t.ticket_id,\n      date_received:    t.date_received,\n      customer_name:    t.customer_name,\n      customer_email:   t.customer_email,\n      subject:          t.subject,\n      message_body:     t.message_body,\n      channel:          t.channel,\n      question_type:    t.question_type,\n      existing_persona: t.existing_persona,\n      request_body: {\n        model:      t.model,\n        max_tokens: 1024,\n        messages: [\n          { role: 'system', content: systemPrompt },\n          { role: 'user',   content: userMessage  }\n        ]\n      }\n    }\n  };\n});"
+      },
+      "id": "node-04-build",
+      "name": "Build Qwen Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.base_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.api_key }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.request_body }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "node-05-qwen",
+      "name": "Qwen - Classify and Answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const responses = $input.all();\nconst originals  = $('Build Qwen Request').all();\n\nreturn responses.map((response, index) => {\n  const rawText = response.json.choices?.[0]?.message?.content || '';\n  const orig    = originals[index]?.json || {};\n\n  const cleaned = rawText\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/\\s*```$/i, '')\n    .trim();\n\n  let result;\n  try {\n    result = JSON.parse(cleaned);\n  } catch (e) {\n    const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n    if (match) {\n      try { result = JSON.parse(match[0]); }\n      catch (e2) { result = null; }\n    }\n  }\n\n  if (!result) {\n    result = {\n      answerable:    false,\n      confidence:    0,\n      theme:         'knowledge_gap',\n      buyer_persona: 'unknown',\n      draft_reply:   null,\n      gap_reason:    'Parse error: ' + rawText.substring(0, 150)\n    };\n  }\n\n  return {\n    json: {\n      ticket_id:      orig.ticket_id      || '',\n      date_received:  orig.date_received  || '',\n      customer_name:  orig.customer_name  || '',\n      customer_email: orig.customer_email || '',\n      subject:        orig.subject        || '',\n      message_body:   orig.message_body   || '',\n      channel:        orig.channel        || 'email',\n      answerable:     result.answerable,\n      confidence:     result.confidence,\n      theme:          result.theme,\n      buyer_persona:  result.buyer_persona,\n      draft_reply:    result.draft_reply,\n      gap_reason:     result.gap_reason,\n      processed_at:   new Date().toISOString()\n    }\n  };\n});"
+      },
+      "id": "node-06-parse",
+      "name": "Parse Qwen Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-01",
+              "leftValue": "={{ $json.answerable }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-07-if",
+      "name": "Is Answerable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const t = item.json;\n  return {\n    json: {\n      ticket_id:         t.ticket_id,\n      date_received:     t.date_received,\n      customer_name:     t.customer_name,\n      customer_email:    t.customer_email,\n      subject:           t.subject,\n      customer_question: t.message_body,\n      channel:           t.channel,\n      outcome:           'DRAFT_READY',\n      action_required:   'Review and send via ' + (t.channel || 'email'),\n      draft_reply:       t.draft_reply,\n      buyer_persona:     t.buyer_persona,\n      theme:             t.theme,\n      confidence:        t.confidence,\n      gap_reason:        null,\n      processed_at:      t.processed_at\n    }\n  };\n});"
+      },
+      "id": "node-08-draft",
+      "name": "Prepare Draft Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const t = item.json;\n  return {\n    json: {\n      ticket_id:         t.ticket_id,\n      date_received:     t.date_received,\n      customer_name:     t.customer_name,\n      customer_email:    t.customer_email,\n      subject:           t.subject,\n      customer_question: t.message_body,\n      channel:           t.channel,\n      outcome:           'KNOWLEDGE_GAP',\n      action_required:   'Escalate to CS team — answer not in Knowledge Base',\n      draft_reply:       null,\n      buyer_persona:     t.buyer_persona,\n      theme:             t.theme,\n      confidence:        t.confidence,\n      gap_reason:        t.gap_reason,\n      processed_at:      t.processed_at\n    }\n  };\n});"
+      },
+      "id": "node-09-gap",
+      "name": "Flag Knowledge Gap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 440]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/marketing-insight",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": { "timeout": 5000 }
+      },
+      "id": "node-14-wf4-trigger",
+      "name": "Call WF4 Marketing Insight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [1760, 560]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "node-10-merge",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items  = $input.all();\nconst config = $('Configuration').first().json;\n\nconst supabaseUrl = config.SUPABASE_URL;\nconst supabaseKey = config.SUPABASE_KEY;\n\nconst allRecords = items.map(i => ({\n  ticket_id:         i.json.ticket_id,\n  date_received:     i.json.date_received     || null,\n  customer_name:     i.json.customer_name,\n  customer_email:    i.json.customer_email,\n  subject:           i.json.subject,\n  customer_question: i.json.customer_question,\n  channel:           i.json.channel,\n  outcome:           i.json.outcome,\n  action_required:   i.json.action_required,\n  draft_reply:       i.json.draft_reply       || null,\n  buyer_persona:     i.json.buyer_persona,\n  theme:             i.json.theme,\n  confidence:        i.json.confidence,\n  gap_reason:        i.json.gap_reason        || null,\n  processed_at:      i.json.processed_at\n}));\n\nconst gapRecords = items\n  .filter(i => i.json.outcome === 'KNOWLEDGE_GAP')\n  .map(i => ({\n    ticket_id:         i.json.ticket_id,\n    date_received:     i.json.date_received   || null,\n    customer_name:     i.json.customer_name,\n    customer_email:    i.json.customer_email,\n    subject:           i.json.subject,\n    customer_question: i.json.customer_question,\n    channel:           i.json.channel,\n    buyer_persona:     i.json.buyer_persona,\n    theme:             i.json.theme,\n    gap_reason:        i.json.gap_reason      || null,\n    status:            'open',\n    processed_at:      i.json.processed_at\n  }));\n\nconst batches = [\n  { supabase_url: supabaseUrl, supabase_key: supabaseKey, table: 'tickets_processed', records: allRecords,\n    on_conflict: 'ticket_id', prefer: 'resolution=merge-duplicates,return=minimal' }\n];\n\nif (gapRecords.length > 0) {\n  batches.push({ supabase_url: supabaseUrl, supabase_key: supabaseKey, table: 'knowledge_gaps', records: gapRecords,\n    on_conflict: 'ticket_id', prefer: 'resolution=ignore-duplicates,return=minimal' });\n}\n\nconsole.log('Sending ' + allRecords.length + ' records to tickets_processed');\nconsole.log('Sending ' + gapRecords.length + ' records to knowledge_gaps');\n\nreturn batches.map(b => ({ json: b }));"
+      },
+      "id": "node-12-supabase-prep",
+      "name": "Prepare Supabase Write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabase_url + '/rest/v1/' + $json.table + ($json.on_conflict ? '?on_conflict=' + $json.on_conflict : '') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $json.supabase_key }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $json.supabase_key }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "={{ $json.prefer || 'return=minimal' }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.records }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "node-13-supabase-write",
+      "name": "Write to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items  = $('Merge Results').all();\nconst drafts = items.filter(i => i.json.outcome === 'DRAFT_READY');\nconst gaps   = items.filter(i => i.json.outcome === 'KNOWLEDGE_GAP');\n\nconsole.log('=== BOLDR INTELLIGENCE ENGINE — RUN COMPLETE ===');\nconsole.log('Total processed  : ' + items.length);\nconsole.log('Draft ready      : ' + drafts.length);\nconsole.log('Knowledge gaps   : ' + gaps.length);\nconsole.log('Saved to Supabase: tickets_processed + knowledge_gaps');\nconsole.log('');\n\nif (drafts.length > 0) {\n  console.log('--- DRAFT REPLIES ---');\n  drafts.forEach(d => {\n    const r = d.json;\n    console.log('[DRAFT] ' + r.ticket_id + ' | ' + r.channel + ' | ' + r.subject);\n    console.log('  Persona: ' + r.buyer_persona + ' | Theme: ' + r.theme + ' | Confidence: ' + r.confidence);\n    console.log('  Reply: ' + (r.draft_reply || '').substring(0, 150) + '...');\n    console.log('');\n  });\n}\n\nif (gaps.length > 0) {\n  console.log('--- KNOWLEDGE GAPS ---');\n  gaps.forEach(g => {\n    const r = g.json;\n    console.log('[GAP] ' + r.ticket_id + ' | ' + r.channel + ' | ' + r.subject);\n    console.log('  Persona: ' + r.buyer_persona + ' | Theme: ' + r.theme);\n    console.log('  Reason: ' + r.gap_reason);\n    console.log('');\n  });\n}\n\nreturn [{\n  json: {\n    summary: {\n      total_processed:   items.length,\n      draft_ready:       drafts.length,\n      knowledge_gaps:    gaps.length,\n      saved_to_supabase: true,\n      ran_at:            new Date().toISOString()\n    },\n    draft_ready: drafts.map(d => d.json),\n    gaps:        gaps.map(g => g.json)\n  }\n}];"
+      },
+      "id": "node-11-output",
+      "name": "Output Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Configuration').first().json;\nconst summary = $input.first().json;\nconst gaps = summary.gaps || [];\n\nconsole.log('=== Gap Sentiment Analysis ===');\nconsole.log('Gaps to label: ' + gaps.length);\n\nif (gaps.length === 0) {\n  console.log('No gaps this run — skipping sentiment analysis');\n  return [{ json: { unique_labels: [], config: config } }];\n}\n\nconst gapList = gaps.map(function(g, i) {\n  return (i + 1) + '. ' + (g.customer_question || g.subject || 'Unknown') + ' (theme: ' + (g.theme || 'unknown') + ')';\n}).join('\\n');\n\nconst sys = 'You are a market intelligence analyst for Boldr, a Singapore watch micro-brand. Given a list of customer questions that the CS team could NOT answer (knowledge gaps), extract a SHORT 2-5 word label for each that captures the core marketable topic. Classify each as Boldr Specific (unique to Boldr products or policies) or Market Signal (broader consumer trend across the watch market). Respond ONLY with a valid JSON array, no markdown: [{\"index\":1,\"label\":\"BPA-Free Straps\",\"classification\":\"Market Signal\"},{\"index\":2,\"label\":\"Vegan Strap\",\"classification\":\"Market Signal\"}]';\n\nconst usr = 'Customer knowledge gaps:\\n' + gapList;\n\nlet labelData = [];\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'POST',\n    url: config.QWEN_BASE_URL,\n    headers: { Authorization: 'Bearer ' + config.QWEN_API_KEY, 'Content-Type': 'application/json' },\n    body: { model: config.QWEN_MODEL, max_tokens: 400, messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }] },\n    json: true\n  });\n  const rawText = (response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content) || '';\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  try { labelData = JSON.parse(cleaned); }\n  catch (e) { const m = cleaned.match(/\\[[\\s\\S]*\\]/); if (m) { try { labelData = JSON.parse(m[0]); } catch (e2) {} } }\n  console.log('Labels extracted: ' + labelData.length);\n} catch (e) { console.log('Qwen label error: ' + (e.message || String(e))); }\n\nconst labeled = gaps.map(function(gap, i) {\n  const lbl = labelData.find(function(l) { return l.index === i + 1; });\n  return {\n    gap: gap,\n    label: lbl ? lbl.label : (gap.theme || 'general').replace(/_/g, ' '),\n    classification: lbl ? (lbl.classification || 'Market Signal') : 'Market Signal'\n  };\n});\n\nconst byLabel = {};\nfor (const item of labeled) {\n  const key = item.label.toLowerCase();\n  if (!byLabel[key]) byLabel[key] = { label: item.label, classification: item.classification, questions: [], gap_count: 0 };\n  byLabel[key].questions.push(item.gap.customer_question || item.gap.subject || '');\n  byLabel[key].gap_count++;\n}\n\nconst unique_labels = Object.values(byLabel);\nconsole.log('Unique labels after dedup: ' + unique_labels.length);\nreturn [{ json: { unique_labels: unique_labels, config: config } }];"
+      },
+      "id": "node-17-extract-labels",
+      "name": "Extract Gap Labels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst unique_labels = input.unique_labels || [];\nconst config = input.config;\n\nif (unique_labels.length === 0) {\n  console.log('No labels to search — sentiment analysis skipped');\n  return [{ json: { sentiment_records: [], config: config } }];\n}\n\nconst TAVILY_KEY = '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';\nconst h = this.helpers;\n\nconst tavilySearch = async function(query, includeDomains) {\n  try {\n    return await h.httpRequest({\n      method: 'POST',\n      url: 'https://api.tavily.com/search',\n      headers: { Authorization: 'Bearer ' + TAVILY_KEY, 'Content-Type': 'application/json' },\n      body: { query: query, include_domains: includeDomains, search_depth: 'advanced', max_results: 3, include_answer: true },\n      json: true\n    });\n  } catch (e) {\n    console.log('Tavily error for \"' + query + '\": ' + (e.message || String(e)));\n    return null;\n  }\n};\n\nconst getTopResult = function(resp) {\n  if (!resp || !resp.results || resp.results.length === 0) return { name: 'No results found', url: '', score: 2 };\n  const top = resp.results[0];\n  let score = 2 + Math.min(4, resp.results.length);\n  if (resp.answer && resp.answer.length > 30) score += 2;\n  if (top.score && top.score > 0.6) score += 2;\n  return { name: top.title || 'Result found', url: top.url || '', score: Math.min(10, Math.max(1, score)) };\n};\n\nconst sentiment_records = [];\n\nfor (const item of unique_labels) {\n  const label = item.label;\n  const classification = item.classification;\n  const questions = item.questions;\n  const gap_count = item.gap_count;\n\n  console.log('Searching external sources for: ' + label);\n  const searchTerm = label + ' watch';\n\n  const redditResp     = await tavilySearch(searchTerm + ' microbrand', ['reddit.com']);\n  const watchuseekResp = await tavilySearch(searchTerm, ['watchuseek.com']);\n  const amazonResp     = await tavilySearch(searchTerm + ' strap', ['amazon.com', 'amazon.sg']);\n\n  const reddit     = getTopResult(redditResp);\n  const watchuseek = getTopResult(watchuseekResp);\n  const amazon     = getTopResult(amazonResp);\n\n  const overallScore = Math.round((reddit.score + watchuseek.score + amazon.score) / 3);\n  const sourcesHit = [redditResp, watchuseekResp, amazonResp].filter(function(r) { return r && r.results && r.results.length > 0; }).length;\n\n  sentiment_records.push({\n    label: label,\n    original_questions: questions,\n    gap_count: gap_count,\n    classification: classification,\n    reddit_name:      reddit.name,\n    reddit_url:       reddit.url,\n    reddit_score:     reddit.score,\n    watchuseek_name:  watchuseek.name,\n    watchuseek_url:   watchuseek.url,\n    watchuseek_score: watchuseek.score,\n    amazon_name:      amazon.name,\n    amazon_url:       amazon.url,\n    amazon_score:     amazon.score,\n    overall_score:    overallScore,\n    summary:          label + ': signal in ' + sourcesHit + '/3 sources. ' + classification + '.',\n    last_seen_at:     new Date().toISOString()\n  });\n}\n\nconsole.log('Tavily searches done: ' + sentiment_records.length + ' records ready');\nreturn [{ json: { sentiment_records: sentiment_records, config: config } }];"
+      },
+      "id": "node-18-tavily-search",
+      "name": "Search Tavily Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst sentiment_records = input.sentiment_records || [];\nconst config = input.config;\n\nif (sentiment_records.length === 0) {\n  console.log('No sentiment records to save');\n  return [{ json: { saved: 0, errors: 0 } }];\n}\n\nconst h = this.helpers;\nlet saved = 0;\nlet errors = 0;\n\nfor (const record of sentiment_records) {\n  try {\n    await h.httpRequest({\n      method: 'POST',\n      url: config.SUPABASE_URL + '/rest/v1/gap_sentiment?on_conflict=label',\n      headers: {\n        apikey: config.SUPABASE_KEY,\n        Authorization: 'Bearer ' + config.SUPABASE_KEY,\n        'Content-Type': 'application/json',\n        Prefer: 'resolution=merge-duplicates,return=minimal'\n      },\n      body: record,\n      json: true\n    });\n    saved++;\n    console.log('Saved: ' + record.label + ' (score: ' + record.overall_score + ')');\n  } catch (e) {\n    errors++;\n    console.log('Error saving \"' + record.label + '\": ' + (e.message || String(e)));\n  }\n}\n\nconsole.log('=== Gap Sentiment Complete: ' + saved + ' saved, ' + errors + ' errors ===');\nreturn [{ json: { saved: saved, errors: errors } }];"
+      },
+      "id": "node-19-save-sentiment",
+      "name": "Save Gap Sentiments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [[{ "node": "Configuration", "type": "main", "index": 0 }]]
+    },
+    "Configuration": {
+      "main": [[{ "node": "Fetch Dedup IDs", "type": "main", "index": 0 }]]
+    },
+    "Fetch Dedup IDs": {
+      "main": [[{ "node": "Load Tickets and Build KB", "type": "main", "index": 0 }]]
+    },
+    "Load Tickets and Build KB": {
+      "main": [[{ "node": "Build Qwen Request", "type": "main", "index": 0 }]]
+    },
+    "Build Qwen Request": {
+      "main": [[{ "node": "Qwen - Classify and Answer", "type": "main", "index": 0 }]]
+    },
+    "Qwen - Classify and Answer": {
+      "main": [[{ "node": "Parse Qwen Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Qwen Response": {
+      "main": [[{ "node": "Is Answerable?", "type": "main", "index": 0 }]]
+    },
+    "Is Answerable?": {
+      "main": [
+        [{ "node": "Prepare Draft Reply",   "type": "main", "index": 0 }],
+        [{ "node": "Flag Knowledge Gap",     "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Draft Reply": {
+      "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]]
+    },
+    "Flag Knowledge Gap": {
+      "main": [[
+        { "node": "Merge Results",            "type": "main", "index": 1 },
+        { "node": "Call WF4 Marketing Insight","type": "main", "index": 0 }
+      ]]
+    },
+    "Merge Results": {
+      "main": [[{ "node": "Prepare Supabase Write", "type": "main", "index": 0 }]]
+    },
+    "Prepare Supabase Write": {
+      "main": [[{ "node": "Write to Supabase", "type": "main", "index": 0 }]]
+    },
+    "Write to Supabase": {
+      "main": [[{ "node": "Output Summary", "type": "main", "index": 0 }]]
+    },
+    "Output Summary": {
+      "main": [[{ "node": "Extract Gap Labels", "type": "main", "index": 0 }]]
+    },
+    "Extract Gap Labels": {
+      "main": [[{ "node": "Search Tavily Sources", "type": "main", "index": 0 }]]
+    },
+    "Search Tavily Sources": {
+      "main": [[{ "node": "Save Gap Sentiments", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "12.0.0"
+}

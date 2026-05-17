@@ -1,0 +1,309 @@
+{
+  "name": "WF2 - Self-Improving KB Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resolve-gap",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-wf2-01",
+      "name": "Resolve Gap Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "boldr-resolve-gap"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-1",
+              "name": "QWEN_API_KEY",
+              "value": "PASTE_YOUR_DASHSCOPE_API_KEY_HERE",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "QWEN_MODEL",
+              "value": "qwen-plus",
+              "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "QWEN_BASE_URL",
+              "value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+              "type": "string"
+            },
+            {
+              "id": "cfg-4",
+              "name": "SUPABASE_URL",
+              "value": "https://grswszdpneukcbfakdel.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "cfg-5",
+              "name": "SUPABASE_KEY",
+              "value": "PASTE_YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-wf2-02",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw    = $('Resolve Gap Webhook').first().json;\nconst body   = raw.body || raw;\nconst config = $('Configuration').first().json;\n\nconst question     = body.question      || '';\nconst answer       = body.answer        || '';\nconst theme        = body.theme         || 'knowledge_gap';\nconst gap_id       = body.gap_id        || '';\nconst ticket_id    = body.ticket_id     || '';\nconst customer_name = body.customer_name || 'Customer';\nconst channel      = body.channel       || 'email';\n\nif (!question || !answer) throw new Error('Missing question or answer in webhook payload');\n\nconst firstName = customer_name.split(' ')[0] || 'there';\n\nconst systemPrompt = [\n  'You are a knowledge base editor AND customer service writer for Boldr, a Singapore-based watch micro-brand.',\n  'Given a customer question and a CS agent answer, produce two outputs:',\n  '1. A clean KB entry (question + answer formatted for internal knowledge base)',\n  '2. A ready-to-send customer reply (warm, branded, addressed to the customer by first name)',\n  '',\n  'Rules:',\n  '- KB question: concise and generalisable, remove personal details.',\n  '- KB answer: factual, under 80 words, brand voice.',\n  '- Customer reply: Friendly and professional, addressed to ' + firstName + '.',\n  '  Vary the opening naturally — do not use the same phrase every time.',\n  '  Get to the answer quickly. No filler. No padding.',\n  '  NEVER start with Great question! or use Dear Sir/Madam.',\n  '  NEVER promise timelines you cannot guarantee.',\n  '- Do NOT invent any facts beyond what the agent provided.',\n  '',\n  'Respond ONLY with valid JSON — no markdown, no extra text:',\n  '{',\n  '  \"question\": \"Clean KB question\",',\n  '  \"answer\": \"KB answer (factual, concise)\",',\n  '  \"theme\": \"one of: materials_safety, customisation, servicing, shipping, product_specs, sustainability, pricing, knowledge_gap\",',\n  '  \"draft_reply\": \"Full customer-facing reply, addressed to ' + firstName + '\"',\n  '}'\n].join('\\n');\n\nconst userMessage = [\n  'Customer: ' + customer_name,\n  'Channel: '  + channel,\n  'Question: ' + question,\n  'CS answer: ' + answer,\n  'Theme: '    + theme\n].join('\\n');\n\nreturn [{\n  json: {\n    gap_id, ticket_id, customer_name, channel,\n    original_question: question,\n    original_answer:   answer,\n    theme,\n    supabase_url: config.SUPABASE_URL,\n    supabase_key: config.SUPABASE_KEY,\n    request_body: {\n      model:      config.QWEN_MODEL,\n      max_tokens: 600,\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user',   content: userMessage  }\n      ]\n    }\n  }\n}];"
+      },
+      "id": "node-wf2-03",
+      "name": "Build Qwen KB Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Configuration').first().json.QWEN_BASE_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Configuration').first().json.QWEN_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.request_body }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "node-wf2-04",
+      "name": "Qwen - Format KB Entry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first();\nconst orig     = $('Build Qwen KB Request').first().json;\nconst rawText  = response.json.choices?.[0]?.message?.content || '';\n\nconst cleaned = rawText\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet result;\ntry {\n  result = JSON.parse(cleaned);\n} catch (e) {\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { result = JSON.parse(match[0]); } catch (e2) { result = null; }\n  }\n}\n\nif (!result) {\n  result = {\n    question:    orig.original_question,\n    answer:      orig.original_answer,\n    theme:       orig.theme,\n    draft_reply: null\n  };\n}\n\nconst approvedAt = new Date().toISOString();\nconsole.log('KB entry formatted — Q: ' + result.question);\n\nreturn [{\n  json: {\n    gap_id:        orig.gap_id,\n    ticket_id:     orig.ticket_id,\n    customer_name: orig.customer_name,\n    channel:       orig.channel,\n    question:      result.question    || orig.original_question,\n    answer:        result.answer      || orig.original_answer,\n    theme:         result.theme       || orig.theme,\n    draft_reply:   result.draft_reply || null,\n    approved_at:   approvedAt,\n    supabase_url:  orig.supabase_url,\n    supabase_key:  orig.supabase_key\n  }\n}];"
+      },
+      "id": "node-wf2-05",
+      "name": "Parse Qwen Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabase_url + '/rest/v1/kb_additions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json.supabase_key }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.supabase_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { ticket_id: $json.ticket_id, question: $json.question, answer: $json.answer, theme: $json.theme, approved_at: $json.approved_at, status: 'pending' } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node-wf2-06",
+      "name": "Save KB Addition",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Parse Qwen Response').first().json.supabase_url + '/rest/v1/knowledge_gaps?id=eq.' + $('Parse Qwen Response').first().json.gap_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Parse Qwen Response').first().json.supabase_key }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Parse Qwen Response').first().json.supabase_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { status: 'resolved', resolved_at: $('Parse Qwen Response').first().json.approved_at, draft_reply: $('Parse Qwen Response').first().json.draft_reply } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node-wf2-07",
+      "name": "Mark Gap Resolved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, ticket_id: $('Parse Qwen Response').first().json.ticket_id, draft_reply: $('Parse Qwen Response').first().json.draft_reply, kb_entry: { question: $('Parse Qwen Response').first().json.question, answer: $('Parse Qwen Response').first().json.answer, theme: $('Parse Qwen Response').first().json.theme } } }}",
+        "options": {}
+      },
+      "id": "node-wf2-08",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Resolve Gap Webhook": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Build Qwen KB Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qwen KB Request": {
+      "main": [
+        [
+          {
+            "node": "Qwen - Format KB Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen - Format KB Entry": {
+      "main": [
+        [
+          {
+            "node": "Parse Qwen Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Qwen Response": {
+      "main": [
+        [
+          {
+            "node": "Save KB Addition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save KB Addition": {
+      "main": [
+        [
+          {
+            "node": "Mark Gap Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Gap Resolved": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5.0.0"
+}

@@ -1,0 +1,193 @@
+BOLDR SUPPLY CO.
+Customer Service — How We Handle Enquiries
+Internal reference for CS team  |  Not for external distribution
+Last updated: January 2026
+1. Overview
+This document describes how our customer service team handles inbound enquiries today. We receive enquiries primarily by email through our Gmail inbox. All replies are sent manually by a CS team member after checking the relevant reference documents.
+We currently have 3 CS staff sharing the inbox. There is no automated routing or AI assistance. Every email is read, assessed, and replied to by a human.
+
+2. Our Reference Documents
+When answering a customer, refer to the following documents:
+Document
+What it covers
+Where to find it
+FAQ Document
+Common questions on returns, shipping, warranty, materials, care
+Google Drive > CS Team > FAQ
+Engraving Rate Card
+Pricing, character limits, turnaround, script types
+Google Drive > CS Team > Rate Cards
+Servicing Rate Card
+Battery, regulation, full service pricing and turnaround
+Google Drive > CS Team > Rate Cards
+Product One-Pager
+Model specs, materials, strap options, compatibility
+Google Drive > CS Team > Products
+Shopify Admin
+Order status, tracking, fulfilment, refund status
+admin.shopify.com
+
+3. Step-by-Step: How to Handle an Enquiry
+Follow these steps for every inbound email:
+
+	•	Read the email fully. Identify what the customer is actually asking — sometimes the main question is buried at the end.
+	•	Check if the question is covered by one of our reference documents (see Section 2 above).
+	•	If yes: draft a reply using the relevant information. Keep it friendly and on-brand. See Section 5 for tone guidance.
+	•	If no: this is a new question we have not been asked before. Note it down (see Section 6 — New Questions Log) and check with the team before replying.
+	•	For order-related issues: log into Shopify first to check the order status before replying.
+	•	Send the reply. Mark the email as resolved in Gmail.
+
+4. Common Enquiry Types & What to Do
+
+4.1 Materials & Safety Questions
+Examples: Is the strap BPA-free? Is the case hypoallergenic? Is the lume safe?
+What to do: Check the Product One-Pager for the specific model. Most safety answers are there. If the question is about a specific certification we have not mentioned before (e.g. EU REACH, RoHS, MRI safety), check with the team before replying.
+⚠ Health-conscious customers often ask about BPA, nickel, and skin reactions. The Product One-Pager has the answers for standard questions.
+
+4.2 Engraving
+Examples: Can I engrave a message? How many characters? What fonts? Can I change my engraving after ordering?
+What to do: Use the Engraving Rate Card. Key things to remember:
+	•	Standard text engraving: up to 40 characters including spaces
+	•	Pricing: SGD 25 for up to 20 chars, SGD 35 for 21-40 chars
+	•	If the customer wants to change/cancel an engraving AFTER ordering:
+	•	Within 1 hour of order: amend for free — update the order note in Shopify
+	•	1-24 hours after order: SGD 15 amendment fee — check with team before confirming
+	•	After production has started: not possible — let customer know politely
+	•	Logo or custom artwork: flag for team review, ask customer to send vector file
+⚠ Engraved items cannot be returned unless there is a manufacturing defect. Remind customers to double-check spelling before confirming.
+
+4.3 Strap Questions
+Examples: Which straps fit my watch? Do you have a rubber strap? Is the strap BPA-free?
+What to do: Check the Product One-Pager for strap compatibility. All current models use 20mm lug width and are compatible with any standard 20mm strap.
+	•	FKM rubber straps: recommended for sports and sensitive skin
+	•	Nylon NATO: lightweight, casual
+	•	Titanium bracelet: premium, heavier
+	•	Leather: dress wear, not recommended for water activities
+If customer asks about strap recycling or sustainability certifications — we do not have this information yet. Note it down in the New Questions Log.
+
+4.4 Watch Servicing
+Examples: How much to replace the battery? My watch is running slow. What does a full service include?
+What to do: Use the Servicing Rate Card. Key prices:
+Service
+Price (SGD)
+Turnaround
+Notes
+Battery replacement
+SGD 35
+5-7 business days
+Includes pressure test
+Regulation (timekeeping accuracy)
+SGD 60
+7-10 business days
+
+Full service
+SGD 180-250
+3-4 weeks
+Price depends on model
+Crystal replacement
+SGD 80-120
+2-3 weeks
+Price depends on model
+
+If the customer is asking about servicing an older or discontinued model: check with the team first before confirming we can do it. Parts availability may be limited.
+
+4.5 Order / Shipping / Tracking
+What to do: Always check Shopify first before replying. Do not guess order status.
+	•	Order status: log into Shopify, search by order number or email, copy tracking number into reply
+	•	Tracking not updating after 5+ business days: escalate to shipping carrier, keep customer informed
+	•	Wrong item received: ask for a photo, flag to team immediately for replacement
+	•	Change delivery address: only possible if order has not been dispatched yet — update manually in Shopify
+	•	Cancel order: if unfulfilled in Shopify, cancel and refund. If already shipped, ask customer to return it when it arrives.
+	•	Customs duties: customer is responsible for import duties in their own country — we cannot predict the amount
+
+4.6 Returns & Warranty
+Key rules:
+	•	Returns accepted within 14 days for unworn, unaltered items
+	•	Engraved items: non-returnable unless there is a manufacturing defect
+	•	Warranty: 2 years on movement. Does NOT cover physical damage, water damage from misuse, or strap wear.
+	•	Warranty claim: ask customer to send photos or video of the defect, then flag to team
+
+5. Tone & Brand Voice
+When writing replies, keep these principles in mind:
+	•	Friendly but not overly casual — we are a premium brand
+	•	Direct — answer the question clearly, do not pad with filler
+	•	Helpful — if we cannot help directly, point them somewhere useful
+	•	Never promise what you are not sure about — check first
+
+Good example reply opening:
+"Hi [Name], thanks for reaching out! Happy to help with that."
+Avoid:
+	•	Starting every reply with "Great question!"
+	•	Using overly formal language ("Dear Sir/Madam")
+	•	Making promises about timelines you cannot guarantee
+
+6. New Questions Log
+If a customer asks something we have never been asked before and it is not in any of our reference documents, do the following:
+	•	Reply to the customer honestly — "Let me check on that and get back to you."
+	•	Add the question to the New Questions Log spreadsheet (Google Drive > CS Team > New Questions Log).
+	•	Discuss with the team at the weekly CS check-in.
+	•	Once we have an answer, update the FAQ document so we can answer it faster next time.
+
+The log should capture:
+Date
+Customer question (paraphrase)
+Theme
+Status
+8 Jan 2026
+Are your straps vegan-friendly?
+Sustainability
+Answered — added to FAQ
+15 Jan 2026
+Do you offer carbon-neutral shipping?
+Sustainability
+Pending — checking with ops
+22 Jan 2026
+Is the watch shock-rated for trail running?
+Product specs
+Answered — added to FAQ
+3 Feb 2026
+Magnetic field resistance (MRI environments)
+Product specs
+Pending — checking with supplier
+14 Feb 2026
+Can I get corporate bulk pricing?
+Sales
+Redirected to corporate@boldr.co
+
+
+
+
+
+
+
+
+
+7. Escalation — When to Ask for Help
+Escalate to the team lead whenever:
+	•	A customer is angry or threatening a chargeback
+	•	A warranty claim involves significant damage or potential product defect
+	•	A refund has been outstanding for more than 10 business days
+	•	A corporate or bulk order enquiry comes in (more than 5 units)
+	•	You are not sure of the answer and cannot find it in the reference documents
+	•	A media or press enquiry comes in — forward to marketing@boldr.co
+
+8. Contacts
+Contact
+Email
+When to use
+CS Team Lead
+cs@boldr.co
+Escalations, difficult cases
+Service Centre
+service@boldr.co
+Servicing, warranty claims, repairs
+Corporate Sales
+corporate@boldr.co
+Bulk orders, B2B enquiries
+Marketing
+marketing@boldr.co
+Media, press, influencer enquiries
+Shopify Admin
+admin.shopify.com
+Order lookups, cancellations, refunds
+
