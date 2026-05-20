@@ -167,6 +167,51 @@
     main { padding: 24px 32px; max-width: 1440px; margin: 0 auto; flex: 1; width: 100%; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
+    .demo-wrap { max-width: 580px; margin: 48px auto; padding: 0 16px; }
+    .demo-section-title { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+    .demo-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 16px; }
+    .demo-field { margin-bottom: 16px; }
+    .demo-field label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .demo-field input, .demo-field select, .demo-field textarea {
+      width: 100%; box-sizing: border-box;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 0.8125rem; color: var(--text); font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .demo-field input:focus, .demo-field select:focus, .demo-field textarea:focus {
+      outline: none; border-color: var(--primary);
+    }
+    .demo-field textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+    .demo-field .field-hint { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+    .demo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .demo-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .demo-sample-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      padding: 0 14px; height: 36px; border-radius: 8px;
+      font-size: 0.8rem; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .demo-sample-btn:hover { background: var(--border); }
+    .demo-submit-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--primary); color: #fff; border: none;
+      padding: 0 20px; height: 36px; border-radius: 8px;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.15s;
+      margin-left: auto;
+    }
+    .demo-submit-btn:hover { opacity: 0.85; }
+    .demo-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .demo-toast { display: none; background: #DCFCE7; border: 1px solid #BBF7D0; color: #166534; border-radius: 8px; padding: 12px 16px; font-size: 0.8125rem; font-weight: 500; margin-top: 12px; }
+    .demo-toast.error { background: #FEE2E2; border-color: #FECACA; color: #991B1B; }
+    .demo-toast.show { display: block; }
+    .sample-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .sample-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+      padding: 5px 12px; border-radius: 9999px; font-size: 0.75rem; cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .sample-chip:hover { background: #EFF6FF; color: #2563EB; border-color: #BFDBFE; }
 
     /* ── Stat cards ── */
     .stats-grid {
@@ -721,6 +766,7 @@
   <button class="tab-btn" onclick="switchTab('marketing')"   id="tab-marketing">Marketing Intel Brief <span class="tab-badge" id="badge-marketing">0</span></button>
   <button class="tab-btn" onclick="switchTab('benchmark')"  id="tab-benchmark">Sentiment Benchmark <span class="tab-badge" id="badge-benchmark">0</span></button>
   <button class="tab-btn" onclick="switchTab('builder')"   id="tab-builder">👤 Builder</button>
+  <button class="tab-btn" onclick="switchTab('demo')"      id="tab-demo">🧪 Add Sample Data</button>
 </nav>
 
 <main>
@@ -938,6 +984,85 @@
     </div>
   </div>
 
+  <!-- ADD SAMPLE DATA -->
+  <div class="tab-panel" id="panel-demo">
+    <div class="demo-wrap">
+      <div style="margin-bottom:24px">
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:6px">🧪 Add Sample Data</div>
+        <div style="font-size:0.8125rem;color:var(--muted);line-height:1.6">Insert a new ticket into the inbox, then run WF1 to see the full AI pipeline process it live. Use the quick-fill buttons below to load a realistic sample question.</div>
+      </div>
+
+      <!-- Quick fill chips -->
+      <div class="demo-section-title">Quick-fill a sample question</div>
+      <div class="sample-chips">
+        <button class="sample-chip" onclick="fillSample('shipping')">📦 Shipping time</button>
+        <button class="sample-chip" onclick="fillSample('discount')">💰 Discount / promo</button>
+        <button class="sample-chip" onclick="fillSample('return')">🔄 Return policy</button>
+        <button class="sample-chip" onclick="fillSample('material')">🛡️ Material safety</button>
+        <button class="sample-chip" onclick="fillSample('engraving')">✏️ Engraving</button>
+        <button class="sample-chip" onclick="fillSample('payment')">💳 Payment method</button>
+      </div>
+
+      <!-- Form -->
+      <div class="demo-form">
+        <div class="demo-section-title" style="margin-bottom:20px">Ticket details</div>
+
+        <div class="demo-row">
+          <div class="demo-field">
+            <label>Ticket ID</label>
+            <input type="text" id="demo-ticket-id" placeholder="TKT-DEMO-001" />
+            <div class="field-hint">Auto-generated if left blank</div>
+          </div>
+          <div class="demo-field">
+            <label>Channel</label>
+            <select id="demo-channel">
+              <option value="email">📧 Email</option>
+              <option value="whatsapp">💬 WhatsApp</option>
+              <option value="instagram_dm">📸 Instagram DM</option>
+              <option value="chat">💬 Chat</option>
+              <option value="facebook">👥 Facebook</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="demo-row">
+          <div class="demo-field">
+            <label>Customer Name</label>
+            <input type="text" id="demo-name" placeholder="e.g. Jane Tan" />
+          </div>
+          <div class="demo-field">
+            <label>Customer Email</label>
+            <input type="email" id="demo-email" placeholder="e.g. jane@example.com" />
+          </div>
+        </div>
+
+        <div class="demo-field">
+          <label>Subject</label>
+          <input type="text" id="demo-subject" placeholder="Brief subject line" />
+        </div>
+
+        <div class="demo-field">
+          <label>Message / Question</label>
+          <textarea id="demo-message" placeholder="Type the customer's question here…"></textarea>
+        </div>
+
+        <div class="demo-actions">
+          <button class="demo-sample-btn" onclick="clearForm()">✕ Clear</button>
+          <button class="demo-submit-btn" id="demo-submit-btn" onclick="submitDemoTicket()">Submit Ticket →</button>
+        </div>
+        <div class="demo-toast" id="demo-toast"></div>
+      </div>
+
+      <!-- Instructions -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;font-size:0.8rem;color:var(--muted);line-height:1.8">
+        <strong style="color:var(--text)">What happens next:</strong><br>
+        1. Ticket is inserted into the <code style="background:var(--border);padding:1px 5px;border-radius:4px">tickets_inbox</code> table in Supabase<br>
+        2. Go to n8n Cloud → WF1 → click <strong style="color:var(--text)">Execute Workflow</strong><br>
+        3. Watch the <strong style="color:var(--text)">Draft Replies</strong> or <strong style="color:var(--text)">Knowledge Gaps</strong> tab update with the result
+      </div>
+    </div>
+  </div>
+
   <!-- MARKETING INTEL BRIEF -->
   <div class="tab-panel" id="panel-marketing">
     <div class="intel-header">
@@ -1031,8 +1156,8 @@
 const SUPABASE_URL  = 'https://grswszdpneukcbfakdel.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdyc3dzemRwbmV1a2NiZmFrZGVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4OTc5NTMsImV4cCI6MjA5NDQ3Mzk1M30.Apo1LjkRzD0GhIWA7LwlYWR3-Ii6PaqJ_e4KFCMqx6s';
 const SUPABASE_SVC  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdyc3dzemRwbmV1a2NiZmFrZGVsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODg5Nzk1MywiZXhwIjoyMDk0NDczOTUzfQ.-Td4iopu7USyYz9z9T0lLp-FcitQX536-DmXbrZxPno';
-const WF2_WEBHOOK   = 'http://localhost:5678/webhook/resolve-gap';
-const WF3_WEBHOOK   = 'http://localhost:5678/webhook/generate-brief';
+const WF2_WEBHOOK   = 'https://morningmaker.app.n8n.cloud/webhook/resolve-gap';
+const WF3_WEBHOOK   = 'https://morningmaker.app.n8n.cloud/webhook/marketing-insight';
 
 let allTickets = [], allGaps = [], allKB = [], allInsights = [], allBenchmarks = [];
 let currentGap = null, currentKBEntry = null, currentDraft = '';
@@ -1693,6 +1818,129 @@ function personaBlock(p) {
 }
 
 loadAll();
+
+// ── Sample Data Tab ──────────────────────────────────────────────────────────
+
+const SAMPLES = {
+  shipping: {
+    name: 'Wei Ling Tan', email: 'weiling.tan@gmail.com', channel: 'email',
+    subject: 'Shipping time to Malaysia',
+    message: "Hi, I'm based in Kuala Lumpur and I'm thinking of ordering the Expedition. How long does shipping usually take to Malaysia? Is there tracking provided, and are there any customs duties I should expect?"
+  },
+  discount: {
+    name: 'Raj Menon', email: 'raj.menon@yahoo.com', channel: 'instagram_dm',
+    subject: 'Any promo codes available?',
+    message: "Hey! I've been following Boldr for a while and really love the designs. Are there any ongoing promotions or discount codes I can use? Also, do you have a referral programme or any loyalty rewards?"
+  },
+  return: {
+    name: 'Sophia Lim', email: 'sophia.lim@outlook.com', channel: 'whatsapp',
+    subject: 'Return and exchange policy',
+    message: "I received my Boldr watch yesterday but the strap doesn't feel comfortable on my wrist. Can I exchange it for a different strap size or style? What's the return window and do I need to pay for return shipping?"
+  },
+  material: {
+    name: 'Ahmad Faris', email: 'a.faris@hotmail.com', channel: 'email',
+    subject: 'Nickel content in watch case',
+    message: "I have a nickel allergy and I'm concerned about whether the watch case and bracelet contain any nickel. Can you confirm what materials are used and whether they are safe for people with sensitive skin or nickel allergies?"
+  },
+  engraving: {
+    name: 'Clara Wong', email: 'clarawong88@gmail.com', channel: 'chat',
+    subject: 'Custom engraving for gift',
+    message: "I want to buy a Boldr watch as a wedding gift and would love to add a personalised engraving on the caseback. What are the engraving options, how many characters are allowed, and how much does it cost? How long does it add to the delivery time?"
+  },
+  payment: {
+    name: 'Kevin Ng', email: 'kevinng@icloud.com', channel: 'email',
+    subject: 'PayNow payment option',
+    message: "Hi, I'm from Singapore and I'd like to place an order. Do you accept PayNow or PayLah for local orders? I'd prefer not to use a credit card. Also, is there any instalment option available?"
+  }
+};
+
+function fillSample(key) {
+  const s = SAMPLES[key];
+  if (!s) return;
+  const pad = n => String(n).padStart(2,'0');
+  const now = new Date();
+  const ts = `DEMO-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  document.getElementById('demo-ticket-id').value = 'TKT-' + ts;
+  document.getElementById('demo-name').value    = s.name;
+  document.getElementById('demo-email').value   = s.email;
+  document.getElementById('demo-channel').value = s.channel;
+  document.getElementById('demo-subject').value = s.subject;
+  document.getElementById('demo-message').value = s.message;
+}
+
+function clearForm() {
+  ['demo-ticket-id','demo-name','demo-email','demo-subject','demo-message'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('demo-channel').value = 'email';
+  document.getElementById('demo-toast').className = 'demo-toast';
+}
+
+function showDemoToast(msg, isError) {
+  const t = document.getElementById('demo-toast');
+  t.textContent = msg;
+  t.className = 'demo-toast show' + (isError ? ' error' : '');
+  if (!isError) setTimeout(() => { t.className = 'demo-toast'; }, 4000);
+}
+
+async function submitDemoTicket() {
+  const ticketId = document.getElementById('demo-ticket-id').value.trim() ||
+    'TKT-DEMO-' + Date.now();
+  const name    = document.getElementById('demo-name').value.trim();
+  const email   = document.getElementById('demo-email').value.trim();
+  const channel = document.getElementById('demo-channel').value;
+  const subject = document.getElementById('demo-subject').value.trim();
+  const message = document.getElementById('demo-message').value.trim();
+
+  if (!name || !subject || !message) {
+    showDemoToast('Please fill in Name, Subject and Message.', true);
+    return;
+  }
+
+  const btn = document.getElementById('demo-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  const payload = {
+    ticket_id:           ticketId,
+    date_received:       new Date().toISOString().slice(0,16).replace('T',' '),
+    customer_name:       name,
+    customer_email:      email || '',
+    channel:             channel,
+    subject:             subject,
+    message_body:        message,
+    status:              'open',
+    processed:           false,
+    answered_by_kb:      'no',
+    requires_escalation: 'no'
+  };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/tickets_inbox`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_SVC,
+        'Authorization': 'Bearer ' + SUPABASE_SVC,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok || res.status === 201) {
+      showDemoToast(`✅ Ticket ${ticketId} added to inbox! Now run WF1 in n8n to process it.`, false);
+      clearForm();
+    } else {
+      const err = await res.text();
+      showDemoToast('Error: ' + (err || res.status), true);
+    }
+  } catch(e) {
+    showDemoToast('Network error: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit Ticket →';
+  }
+}
 </script>
 </body>
 </html>
