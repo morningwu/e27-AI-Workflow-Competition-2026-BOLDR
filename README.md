@@ -1,9 +1,15 @@
-### e27 Echelon Singapore · AI Workflow Competition 2026 - Boldr Customer Intelligence Engine
-
-AI-powered Customer Intelligence Engine for BOLDR — auto-drafts replies, detects knowledge gaps, benchmarks community sentiment, and generates marketing insights. Built with n8n, Qwen AI, Supabase &amp; Tavily. Submission for e27 Echelon Singapore AI Workflow Competition 2026 by Morning Wu
-
-
+# Boldr CS Intelligence — AI Workflow System
+### e27 Echelon Singapore · AI Workflow Competition 2026
 **Builder:** Morning Wu · [LinkedIn](https://www.linkedin.com/in/morningwu/) · morning@afterworkstartup.com
+
+---
+
+## 🔗 Live Links
+
+| | |
+|---|---|
+| 📊 **Live Dashboard** | https://boldercs.netlify.app/ |
+| ⚙️ **n8n Workflows** | https://morningmaker.app.n8n.cloud |
 
 ---
 
@@ -11,20 +17,20 @@ AI-powered Customer Intelligence Engine for BOLDR — auto-drafts replies, detec
 
 An end-to-end AI customer support system built for **Boldr**, a Singapore watch micro-brand. It automatically classifies incoming customer tickets, drafts replies from a live knowledge base, detects content gaps, benchmarks those gaps against real community sentiment, and generates periodic marketing briefs — all without human intervention in the loop.
 
-**Live dashboard:** open `dashboard/index.html` in any browser (no server needed).
-
 ---
 
 ## System Architecture
 
 ```
-Customer Ticket (CSV / email)
+Customer Ticket (submitted via dashboard or Supabase)
         │
         ▼
 ┌──────────────────────────────────────────────────────────┐
-│  WF1 · Core Intelligence Loop  (n8n)                     │
+│  WF1 · Core Intelligence Loop  (n8n Cloud)               │
 │                                                          │
-│  Classify ticket → Search KB → Enough confidence?        │
+│  Load tickets from Supabase tickets_inbox                │
+│  → Build KB from knowledge_sources table                 │
+│  → Classify ticket → Search KB → Enough confidence?      │
 │     YES → Draft reply with Qwen AI → Save                │
 │     NO  → Log knowledge gap                              │
 │              └→ Extract gap labels with Qwen             │
@@ -33,7 +39,6 @@ Customer Ticket (CSV / email)
 └──────────────────────────────────────────────────────────┘
         │
         ├── Knowledge Gap detected
-        │         │
         │         ▼
         │   ┌─────────────────────────────────┐
         │   │  WF2 · Self-Improving KB Loop   │
@@ -43,7 +48,6 @@ Customer Ticket (CSV / email)
         │   └─────────────────────────────────┘
         │
         └── Every 6 hours (5+ open gaps exist)
-                  │
                   ▼
           ┌─────────────────────────────────────┐
           │  WF3 · Marketing Insight Generator  │
@@ -54,201 +58,134 @@ Customer Ticket (CSV / email)
 
 ---
 
-## Prerequisites — API Keys & Accounts
+## Option A — Try the Live Demo (No Setup Needed)
 
-You need **four** services. All have free tiers sufficient to run this project.
+1. Open → **https://boldercs.netlify.app/**
+2. Go to the **🧪 Add Sample Data** tab
+3. Click any quick-fill chip (e.g. "📦 Shipping time") to load a sample question
+4. Click **Submit Ticket** — inserted into Supabase instantly
+5. Go to [n8n Cloud](https://morningmaker.app.n8n.cloud) → open **WF1** → click **Execute Workflow**
+6. Watch **Draft Replies** or **Knowledge Gaps** tab update with the AI result live
 
-### 1. Supabase (database)
-1. Create a free account at [supabase.com](https://supabase.com)
-2. Create a new project
-3. Go to **Project Settings → API** and copy:
-   - **Project URL** → looks like `https://xxxx.supabase.co`
-   - **Service Role Key** → starts with `eyJ...`
-
-> Use the **service role key**, not the anon key — it bypasses Row Level Security so the workflows can write freely.
-
-### 2. Qwen AI / DashScope (LLM)
-1. Create an account at [dashscope-intl.aliyuncs.com](https://dashscope-intl.aliyuncs.com)
-2. Go to **API Keys** and generate a new key → starts with `sk-...`
-
-> Model used: `qwen-plus`
-> Endpoint: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions`
-
-### 3. Tavily (real-time web search)
-1. Create an account at [tavily.com](https://tavily.com)
-2. Copy your **API Key** from the dashboard → starts with `tvly-...`
-
-> Used by WF1 to search Reddit r/MicrobrandWatches, WatchUSeek, and Amazon for community sentiment on each detected knowledge gap.
-
-### 4. n8n (workflow engine)
-
-**Option A — Docker** (recommended):
-```bash
-cd n8n
-docker compose up -d
-# Open http://localhost:5678
-```
-
-**Option B — n8n Cloud**: [app.n8n.cloud](https://app.n8n.cloud) (free tier available)
+> Contact morning@afterworkstartup.com for n8n Cloud viewer access if needed.
 
 ---
 
-## Setup Instructions
+## Option B — Self-Hosted Setup (Full Reproduction)
 
-### Step 1 — Create the Database Tables (Supabase)
+### Prerequisites — API Keys & Accounts
 
-1. Open your Supabase project → **SQL Editor**
-2. Copy the full contents of [`supabase/schema.sql`](supabase/schema.sql) and run it
+| Service | Purpose | Sign up |
+|---|---|---|
+| **Supabase** | Database + REST API | [supabase.com](https://supabase.com) — free |
+| **Qwen AI / DashScope** | LLM for drafting + classification | [dashscope-intl.aliyuncs.com](https://dashscope-intl.aliyuncs.com) — free quota |
+| **Tavily** | Real-time web search | [tavily.com](https://tavily.com) — free tier |
+| **n8n** | Workflow automation | [app.n8n.cloud](https://app.n8n.cloud) — free tier |
 
-This creates all 7 tables:
+---
+
+### Step 1 — Create Database Tables (Supabase)
+
+1. Create a new Supabase project → go to **SQL Editor**
+2. Paste and run the full contents of [`supabase/schema.sql`](supabase/schema.sql)
+
+Tables created:
 
 | Table | Purpose |
 |---|---|
-| `knowledge_base` | KB entries WF1 searches to draft replies |
-| `tickets_processed` | One row per ticket processed by WF1 |
+| `knowledge_sources` | Raw KB source files (FAQ, product ref, rate cards) |
+| `tickets_inbox` | Incoming tickets to be processed by WF1 |
+| `tickets_processed` | Every ticket WF1 has processed |
 | `knowledge_gaps` | Questions the KB could not answer |
 | `kb_additions` | Candidate KB entries pending human approval |
-| `marketing_briefs` | Periodic AI-generated content strategy briefs (WF3) |
-| `marketing_insights` | Per-gap marketing opportunity scores (WF3) |
-| `gap_sentiment` | Community sentiment per gap label — Reddit, WatchUSeek, Amazon (WF1 inline) |
+| `marketing_briefs` | Periodic AI-generated content strategy briefs |
+| `marketing_insights` | Per-gap marketing opportunity scores |
+| `gap_sentiment` | Community sentiment per gap label |
 
-### Step 2 — Seed the Knowledge Base
+---
 
-WF1 searches `knowledge_base` to draft replies. Populate it from the source documents in `data/Knowledge Sources/`:
+### Step 2 — Seed the Data
 
-| File | Contents |
+#### Upload tickets
+1. Supabase → **Table Editor** → `tickets_inbox` → **Import data from CSV**
+2. Upload `data/01_customer_tickets.csv`
+
+#### Upload knowledge sources
+**Table Editor** → `knowledge_sources` → **Insert row** — 4 rows total:
+
+| `name` field | File to open and paste into `content` field |
 |---|---|
-| `02_product_reference.txt` | Product specs, materials, pricing |
-| `03a_rate_card_engraving.csv` | Engraving service prices |
-| `03b_rate_card_servicing.csv` | Watch servicing prices |
-| `04_faq_document.txt` | Customer FAQ |
-| `05_SOP.txt` | Customer service SOPs |
+| `faq` | `data/Knowledge Sources/04_faq_document.txt` |
+| `product_reference` | `data/Knowledge Sources/02_product_reference.txt` |
+| `engraving_rates` | `data/Knowledge Sources/03a_rate_card_engraving.csv` |
+| `servicing_rates` | `data/Knowledge Sources/03b_rate_card_servicing.csv` |
 
-Insert rows into `knowledge_base` via Supabase SQL Editor:
-```sql
-insert into knowledge_base (question, answer, theme, source) values
-  ('What is the water resistance rating of the Expedition?',
-   'The Boldr Expedition is rated 100m (10ATM). Safe for swimming and snorkelling, not diving.',
-   'product_specs', 'product_reference'),
-  ('Do you offer watch servicing for older models?',
-   'Yes. Battery replacement SGD 35, Regulation Service SGD 85, Full Service from SGD 160.',
-   'servicing', 'rate_card_servicing');
--- Add one row per key fact from each source document
-```
+Open each file in a text editor → Select All → Copy → paste into the `content` field.
+
+---
 
 ### Step 3 — Import Workflows into n8n
 
-1. Open n8n → **Workflows → Import from file**
-2. Import in this order (WF2 and WF3 must be active before WF1 runs):
+Sign up at [app.n8n.cloud](https://app.n8n.cloud) → **Workflows → Import from file**
+
+Import in this order (WF2 and WF3 must be active before WF1 runs):
 
 | File | Workflow | Trigger |
 |---|---|---|
-| `WF2_Self_Improving_KB_Loop.json` | Self-improving KB loop | Webhook — called from dashboard Resolve button |
-| `WF3_Marketing_Insight_Generator.json` | Marketing insight generator | Schedule — every 6 hours when 5+ open gaps exist |
-| `WF1_Core_Intelligence_Loop.json` | Core intelligence loop | Webhook — one call per ticket |
+| `WF2_Self_Improving_KB_Loop.json` | Self-improving KB loop | Webhook |
+| `WF3_Marketing_Insight_Generator.json` | Marketing insight generator | Schedule — every 6 hours |
+| `WF1_Core_Intelligence_Loop.json` | Core intelligence loop | Manual |
 
-### Step 4 — Paste API Keys into Each Workflow
+---
 
-Each workflow has a **Configuration** node (the first Set node after the trigger). Open it and replace the placeholder values:
+### Step 4 — Paste API Keys
+
+In every workflow, open the **Configuration** node and fill in:
 
 | Field | Value |
 |---|---|
-| `QWEN_API_KEY` | Your DashScope API key (`sk-...`) |
+| `QWEN_API_KEY` | Your DashScope key (`sk-...`) |
 | `QWEN_MODEL` | `qwen-plus` *(leave as-is)* |
 | `QWEN_BASE_URL` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions` *(leave as-is)* |
 | `SUPABASE_URL` | Your Supabase project URL |
-| `SUPABASE_KEY` | Your Supabase service role key |
+| `SUPABASE_KEY` | Your Supabase **service role key** |
 
 **WF1 only** — also update the Tavily key inside the **Search Tavily Sources** code node:
 ```javascript
 const TAVILY_KEY = 'tvly-YOUR_KEY_HERE';
 ```
 
-### Step 5 — Activate Workflows
+Also update the **Call WF3 Marketing Insight** node URL to your own n8n webhook URL.
 
-1. Activate **WF2** and **WF3** first
-2. Activate **WF1** last
-3. Copy the **WF1 webhook URL** from the Webhook trigger node — you'll use it to submit tickets
+---
 
-### Step 6 — Configure the Dashboard
+### Step 5 — Configure the Dashboard
 
-Open `dashboard/index.html` in a text editor and update the two config constants near the top of the `<script>` section:
+Open `dashboard/index.html` and update these lines near the top of the `<script>` section:
 
 ```javascript
-const SUPABASE_URL = 'https://your-project.supabase.co';
-const SUPABASE_KEY = 'your-anon-key';  // anon key is fine — dashboard is read-only
+const SUPABASE_URL  = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON = 'your-anon-key';
+const SUPABASE_SVC  = 'your-service-role-key';
+const WF2_WEBHOOK   = 'https://YOUR-N8N/webhook/resolve-gap';
+const WF3_WEBHOOK   = 'https://YOUR-N8N/webhook/marketing-insight';
 ```
 
-Then open `dashboard/index.html` directly in any browser. No server needed.
-
-### Step 7 — Run the Demo
-
-The sample tickets are in `data/01_customer_tickets.csv`. Send them to WF1 via the webhook:
-
-```bash
-curl -X POST http://localhost:5678/webhook/boldr-cs-intelligence \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ticket_id": "TKT-1001",
-    "subject": "Water resistance question",
-    "customer_name": "Jane Tan",
-    "customer_email": "jane@example.com",
-    "customer_question": "Is the Expedition safe to wear while swimming?",
-    "channel": "email",
-    "date_received": "2026-01-15T09:00:00Z"
-  }'
-```
-
-The dashboard auto-refreshes. Switch to each tab to see results populate in real time.
+Deploy to [Netlify Drop](https://netlify.com/drop) by dragging the `dashboard/` folder.
 
 ---
 
-## Dashboard Tabs
+### Step 6 — Run
 
-| Tab | What it shows |
-|---|---|
-| **Overview** | KPI summary — tickets processed, auto-draft rate, gap rate |
-| **Draft Replies** | AI-drafted replies ready to send; click any row to see the original question |
-| **Knowledge Gaps** | Unanswered questions; click Resolve to trigger WF2 |
-| **KB Additions** | Pending and approved KB entries generated by WF2 |
-| **Weekly Report** | Theme, persona, outcome, and channel breakdowns |
-| **Marketing Intel Brief** | Qwen-generated content strategy brief aggregated from gap patterns |
-| **Sentiment Benchmark** | Community sentiment per gap label — sourced from Reddit, WatchUSeek, Amazon |
-| **Builder** | About the project and the builder |
+1. Activate **WF2** and **WF3** first, then **WF1**
+2. n8n → **WF1** → click **Execute Workflow**
+3. Dashboard updates automatically
+
+> **Batch size:** set `TICKET_LIMIT` in WF1's Configuration node (default `10`). Set to `0` for all tickets.
 
 ---
 
-## Project Structure
-
-```
-e27 Builder Challenge/
-├── README.md
-├── dashboard/
-│   └── index.html                   # Single-file dashboard — open in browser
-├── data/
-│   ├── 01_customer_tickets.csv      # Sample tickets for the demo
-│   └── Knowledge Sources/           # Source documents to seed knowledge_base
-│       ├── 02_product_reference.txt
-│       ├── 03a_rate_card_engraving.csv
-│       ├── 03b_rate_card_servicing.csv
-│       ├── 04_faq_document.txt
-│       └── 05_SOP.txt
-├── n8n/
-│   ├── docker-compose.yml           # Run n8n locally with Docker
-│   ├── .env.example                 # Environment variable reference
-│   └── workflows/
-│       ├── WF1_Core_Intelligence_Loop.json
-│       ├── WF2_Self_Improving_KB_Loop.json
-│       └── WF3_Marketing_Insight_Generator.json
-└── supabase/
-    └── schema.sql                   # Run once in Supabase SQL Editor
-```
-
----
-
-## Resetting the Database (Testing)
-
-To wipe all data and start fresh, run in Supabase SQL Editor:
+### Reset Database
 
 ```sql
 truncate table tickets_processed   restart identity cascade;
@@ -257,9 +194,56 @@ truncate table kb_additions        restart identity cascade;
 truncate table marketing_briefs    restart identity cascade;
 truncate table marketing_insights  restart identity cascade;
 truncate table gap_sentiment       restart identity cascade;
+
+-- Reset ticket processing flag so WF1 picks them up again
+update tickets_inbox set processed = false;
 ```
 
-> `knowledge_base` is intentionally excluded — you don't want to lose your KB seed data.
+> `knowledge_sources` and `tickets_inbox` data is preserved.
+
+---
+
+## Dashboard Tabs
+
+| Tab | What it shows |
+|---|---|
+| **Overview** | KPI summary — tickets processed, auto-draft rate, gap rate |
+| **Draft Replies** | AI-drafted replies ready to send; click row to see original question |
+| **Knowledge Gaps** | Unanswered questions; click Resolve to trigger WF2 |
+| **KB Additions** | Pending and approved KB entries generated by WF2 |
+| **Weekly Report** | Theme, persona, outcome, and channel breakdowns |
+| **Marketing Intel Brief** | Qwen-generated content strategy brief from gap patterns |
+| **Sentiment Benchmark** | Community sentiment per gap label — Reddit, WatchUSeek, Amazon |
+| **🧪 Add Sample Data** | Submit a new ticket live to see the full AI pipeline run |
+| **👤 Builder** | About the project and builder |
+
+---
+
+## Project Structure
+
+```
+live deploy/
+├── README.md
+├── dashboard/
+│   └── index.html                        # Deploy this folder to Netlify
+├── data/
+│   ├── 01_customer_tickets.csv           # Upload to tickets_inbox in Supabase
+│   └── Knowledge Sources/               # Paste contents into knowledge_sources table
+│       ├── 02_product_reference.txt
+│       ├── 03a_rate_card_engraving.csv
+│       ├── 03b_rate_card_servicing.csv
+│       ├── 04_faq_document.txt
+│       └── 05_SOP.txt
+├── n8n/
+│   ├── docker-compose.yml               # Local Docker alternative to n8n Cloud
+│   ├── .env.example
+│   └── workflows/
+│       ├── WF1_Core_Intelligence_Loop.json
+│       ├── WF2_Self_Improving_KB_Loop.json
+│       └── WF3_Marketing_Insight_Generator.json
+└── supabase/
+    └── schema.sql                        # Run once in Supabase SQL Editor
+```
 
 ---
 
@@ -268,10 +252,10 @@ truncate table gap_sentiment       restart identity cascade;
 | Tool | Role |
 |---|---|
 | **n8n** | Workflow automation engine |
-| **Qwen AI (qwen-plus)** | LLM for ticket classification, KB search, reply drafting, and insight generation |
+| **Qwen AI (qwen-plus)** | LLM for classification, KB search, reply drafting, insight generation |
 | **Supabase** | PostgreSQL database + instant REST API |
 | **Tavily** | Real-time web search for community sentiment |
-| **Vanilla HTML/JS** | Dashboard — zero dependencies, opens directly in browser |
+| **Vanilla HTML/JS** | Dashboard — zero dependencies, opens in browser |
 
 ---
 
