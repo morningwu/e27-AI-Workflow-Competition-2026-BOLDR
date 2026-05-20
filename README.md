@@ -9,7 +9,6 @@
 | | |
 |---|---|
 | 📊 **Live Dashboard** | https://boldercs.netlify.app/ |
-| ⚙️ **n8n Workflows** | https://morningmaker.app.n8n.cloud |
 
 ---
 
