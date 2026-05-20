@@ -5,9 +5,39 @@
 -- ============================================================
 
 
--- ── 1. Knowledge Base ────────────────────────────────────────
---  Pre-populated from Boldr's product reference, FAQ, SOP, and
---  rate cards. WF1 searches this table to draft replies.
+-- ── 1. Tickets Inbox ─────────────────────────────────────────
+--  Incoming customer tickets submitted via the dashboard or CSV.
+--  WF1 polls this table for unprocessed tickets.
+
+create table if not exists tickets_inbox (
+  id                bigserial primary key,
+  ticket_id         text        unique not null,
+  subject           text,
+  customer_name     text,
+  customer_email    text,
+  customer_question text,
+  channel           text        default 'web',
+  date_received     timestamptz default now(),
+  processed         boolean     default false
+);
+
+
+-- ── 2. Knowledge Sources ─────────────────────────────────────
+--  Raw KB source documents (FAQ, product reference, rate cards).
+--  WF1 builds its knowledge base from these at runtime.
+--  Seed with 4 rows: faq, product_reference, engraving_rates, servicing_rates.
+
+create table if not exists knowledge_sources (
+  id          bigserial primary key,
+  name        text        unique not null,  -- 'faq' | 'product_reference' | 'engraving_rates' | 'servicing_rates'
+  content     text        not null,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+
+-- ── 3. Knowledge Base ────────────────────────────────────────
+--  Individual Q&A pairs. WF2 writes approved KB additions here.
 
 create table if not exists knowledge_base (
   id          bigserial primary key,
@@ -97,7 +127,7 @@ create table if not exists marketing_briefs (
 
 
 -- ── 6. Marketing Insights ─────────────────────────────────────
---  One AI-scored insight generated per knowledge gap (WF4).
+--  One AI-scored insight generated per knowledge gap (WF3).
 
 create table if not exists marketing_insights (
   id               bigserial primary key,
@@ -148,6 +178,8 @@ create table if not exists gap_sentiment (
 --  Workflows use the service role key (bypasses RLS).
 --  Enable RLS on all tables for production hardening.
 
+alter table tickets_inbox        enable row level security;
+alter table knowledge_sources    enable row level security;
 alter table knowledge_base       enable row level security;
 alter table tickets_processed    enable row level security;
 alter table knowledge_gaps       enable row level security;
@@ -165,3 +197,8 @@ alter table gap_sentiment        enable row level security;
 --  truncate table marketing_briefs    restart identity cascade;
 --  truncate table marketing_insights  restart identity cascade;
 --  truncate table gap_sentiment       restart identity cascade;
+--
+--  -- Reset ticket processing flag so WF1 picks them up again
+--  update tickets_inbox set processed = false;
+--
+--  -- knowledge_sources and tickets_inbox data is preserved by default.
